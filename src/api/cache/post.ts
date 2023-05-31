@@ -6,6 +6,8 @@ import {
   BadRequestError,
   InternalError,
 } from "../../common/errors/api_error";
+import { supabaseClient } from "../../lib/supabase";
+import { EmbeddingHelper } from "../../helpers/embedding_helper";
 dotenv.config();
 
 const payloadSchema = z.object({
@@ -18,7 +20,6 @@ type Payload = z.infer<typeof payloadSchema>;
 
 export default async (req: express.Request, res: express.Response) => {
   try {
-    console.log(req.body);
     const zodRes = payloadSchema.safeParse(req.body);
     if (!zodRes.success)
       throw new BadRequestError(
@@ -28,6 +29,21 @@ export default async (req: express.Request, res: express.Response) => {
       );
 
     const payload: Payload = zodRes.data;
+
+    const promptEmbedding = await EmbeddingHelper.computeEmbedding(
+      payload.prompt
+    );
+
+    // Store the vector in Postgres
+    const { data, error } = await supabaseClient.from("completions").insert({
+      prompt: payload.prompt,
+      completion: payload.completion,
+      prompt_embedding: promptEmbedding,
+    });
+
+    if (error) throw new InternalError(error.message);
+
+    return res.json(data);
   } catch (e) {
     if (e instanceof APIError) throw e;
     throw new InternalError((e as Error).message);
