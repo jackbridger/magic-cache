@@ -12,7 +12,7 @@ dotenv.config();
 
 const payloadSchema = z.object({
   prompt: z.string().nonempty(),
-  completion: z.string().nonempty(),
+  completion: z.string(),
 });
 
 // extract the inferred type
@@ -35,7 +35,7 @@ export default async (req: express.Request, res: express.Response) => {
     );
 
     // Store the vector in Postgres
-    const { data, error } = await supabaseClient.from("completions").insert({
+    const { data, error } = await supabaseClient.from("cache_entries").insert({
       prompt: payload.prompt,
       completion: payload.completion,
       prompt_embedding: promptEmbedding,
@@ -43,7 +43,7 @@ export default async (req: express.Request, res: express.Response) => {
 
     if (error) throw new InternalError(error.message);
 
-    return res.json(data);
+    return res.json({ success: true });
   } catch (e) {
     if (e instanceof APIError) throw e;
     throw new InternalError((e as Error).message);

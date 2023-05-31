@@ -15,7 +15,11 @@ dotenv.config();
 
 const payloadSchema = z.object({
   prompt: z.string().nonempty(),
-  similarity_threshold: z.number().min(0).max(1).default(0.7),
+  //   parse string into number
+  similarity_threshold: z.preprocess(
+    (a) => parseFloat(z.string().parse(a)),
+    z.number().positive().max(1)
+  ),
 });
 
 // extract the inferred type
@@ -33,17 +37,25 @@ export default async (req: express.Request, res: express.Response) => {
 
     const payload: Payload = zodRes.data;
 
+    console.log(payload);
+
     const promptEmbedding = await EmbeddingHelper.computeEmbedding(
       payload.prompt
     );
 
-    const { data: documents } = await supabaseClient.rpc("match_documents", {
-      query_embedding: promptEmbedding,
-      match_threshold: payload.similarity_threshold, // Similarity threshold
-      match_count: 10, // Number of match
-    });
+    console.log(promptEmbedding);
 
-    if (documents.length === 0) throw new NotFoundError("No documents found");
+    const { data: documents } = await supabaseClient.rpc(
+      "match_prompts_cosine",
+      {
+        query_embedding: promptEmbedding,
+        match_threshold: payload.similarity_threshold, // Similarity threshold
+        match_count: 10, // Number of match
+      }
+    );
+
+    if (!documents || documents.length === 0)
+      throw new NotFoundError("No documents found");
 
     return res.json(documents);
   } catch (e) {
